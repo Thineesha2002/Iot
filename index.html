@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 Humidity Dashboard</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        canvas {
+            max-width: 600px;
+            margin: 20px auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>ESP32 Humidity & Temperature Dashboard</h1>
+    <p id="status">Connecting to MQTT...</p>
+    <canvas id="humidityChart"></canvas>
+    <canvas id="temperatureChart"></canvas>
+
+    <script>
+        const client = mqtt.connect('ws://broker.hivemq.com:8000/mqtt');
+        const topic = 'home/sensor';
+
+        const humidityCtx = document.getElementById('humidityChart').getContext('2d');
+        const temperatureCtx = document.getElementById('temperatureChart').getContext('2d');
+
+        const humidityData = {
+            labels: [],
+            datasets: [{
+                label: 'Humidity (%)',
+                data: [],
+                borderColor: 'blue',
+                fill: false
+            }]
+        };
+
+        const temperatureData = {
+            labels: [],
+            datasets: [{
+                label: 'Temperature (°C)',
+                data: [],
+                borderColor: 'red',
+                fill: false
+            }]
+        };
+
+        const humidityChart = new Chart(humidityCtx, {
+            type: 'line',
+            data: humidityData,
+            options: { responsive: true }
+        });
+
+        const temperatureChart = new Chart(temperatureCtx, {
+            type: 'line',
+            data: temperatureData,
+            options: { responsive: true }
+        });
+
+        client.on('connect', () => {
+            document.getElementById('status').innerText = 'Connected to MQTT';
+            client.subscribe(topic, () => {
+                console.log(`Subscribed to ${topic}`);
+            });
+        });
+
+        client.on('message', (topic, message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                const humidity = data.humidity;
+                const temperature = data.temperature;
+                const timestamp = new Date().toLocaleTimeString();
+
+                console.log(`Humidity: ${humidity} % | Temperature: ${temperature} °C`);
+
+                // Update humidity chart
+                humidityData.labels.push(timestamp);
+                humidityData.datasets[0].data.push(humidity);
+                if (humidityData.labels.length > 20) {
+                    humidityData.labels.shift();
+                    humidityData.datasets[0].data.shift();
+                }
+                humidityChart.update();
+
+                // Update temperature chart
+                temperatureData.labels.push(timestamp);
+                temperatureData.datasets[0].data.push(temperature);
+                if (temperatureData.labels.length > 20) {
+                    temperatureData.labels.shift();
+                    temperatureData.datasets[0].data.shift();
+                }
+                temperatureChart.update();
+            } catch (error) {
+                console.error("Error parsing MQTT message:", error);
+            }
+        });
+    </script>
+</body>
+</html>
